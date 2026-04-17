@@ -11,127 +11,128 @@ env:
 
 jobs:
   build-and-deploy:
-    runs-on: windows-latest
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Verify Azure login
-        shell: powershell
+        shell: bash
         run: |
           az account show
 
       - name: Log in to ACR
-        shell: powershell
+        shell: bash
         run: |
           az acr login --name recipehubacr27ch
 
       - name: Set variables
-        shell: powershell
+        shell: bash
         run: |
-          "IMAGE_TAG=$env:GITHUB_SHA" >> $env:GITHUB_ENV
-          "RG=recipehub-rg" >> $env:GITHUB_ENV
-          "ACR_LOGIN_SERVER=recipehubacr27ch.azurecr.io" >> $env:GITHUB_ENV
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
+          echo "RG=recipehub-rg" >> $GITHUB_ENV
+          echo "ACR_LOGIN_SERVER=recipehubacr27ch.azurecr.io" >> $GITHUB_ENV
 
-          $acrUser = az acr credential show --name recipehubacr27ch --query username -o tsv
-          $acrPass = az acr credential show --name recipehubacr27ch --query "passwords[0].value" -o tsv
+          acrUser=$(az acr credential show --name recipehubacr27ch --query username -o tsv)
+          acrPass=$(az acr credential show --name recipehubacr27ch --query "passwords[0].value" -o tsv)
 
-          "TRIVY_USERNAME=$acrUser" >> $env:GITHUB_ENV
-          "TRIVY_PASSWORD=$acrPass" >> $env:GITHUB_ENV
+          echo "TRIVY_USERNAME=$acrUser" >> $GITHUB_ENV
+          echo "TRIVY_PASSWORD=$acrPass" >> $GITHUB_ENV
 
       - name: Get current recipe service URL
-        shell: powershell
+        shell: bash
         run: |
-          $recipeFqdn = az containerapp show `
-            --name recipe-service-app `
-            --resource-group recipehub-rg `
-            --query "properties.configuration.ingress.fqdn" `
-            -o tsv
-          "RECIPE_URL=https://$recipeFqdn" >> $env:GITHUB_ENV
-          Write-Host "Recipe URL is https://$recipeFqdn"
+          recipeFqdn=$(az containerapp show \
+            --name recipe-service-app \
+            --resource-group recipehub-rg \
+            --query "properties.configuration.ingress.fqdn" \
+            -o tsv)
+
+          echo "RECIPE_URL=https://$recipeFqdn" >> $GITHUB_ENV
+          echo "Recipe URL is https://$recipeFqdn"
 
       - name: Build and push notification-service image
-        shell: powershell
+        shell: bash
         run: |
-          docker build `
-            -t $env:ACR_LOGIN_SERVER/notification-service:$env:IMAGE_TAG `
-            .\notification-service
-          docker push $env:ACR_LOGIN_SERVER/notification-service:$env:IMAGE_TAG
+          docker build \
+            -t $ACR_LOGIN_SERVER/notification-service:$IMAGE_TAG \
+            ./notification-service
+          docker push $ACR_LOGIN_SERVER/notification-service:$IMAGE_TAG
 
       - name: Build and push recipe-service image
-        shell: powershell
+        shell: bash
         run: |
-          docker build `
-            -t $env:ACR_LOGIN_SERVER/recipe-service:$env:IMAGE_TAG `
-            .\recipe-service
-          docker push $env:ACR_LOGIN_SERVER/recipe-service:$env:IMAGE_TAG
+          docker build \
+            -t $ACR_LOGIN_SERVER/recipe-service:$IMAGE_TAG \
+            ./recipe-service
+          docker push $ACR_LOGIN_SERVER/recipe-service:$IMAGE_TAG
 
       - name: Build and push frontend image
-        shell: powershell
+        shell: bash
         run: |
-          docker build `
-            --build-arg VITE_API_URL="$env:RECIPE_URL" `
-            -t $env:ACR_LOGIN_SERVER/frontend:$env:IMAGE_TAG `
-            .\frontend
-          docker push $env:ACR_LOGIN_SERVER/frontend:$env:IMAGE_TAG
+          docker build \
+            --build-arg VITE_API_URL="$RECIPE_URL" \
+            -t $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG \
+            ./frontend
+          docker push $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
 
       - name: Scan notification-service image with Trivy
-        shell: powershell
+        shell: bash
         run: |
-          docker run --rm `
-            -e TRIVY_USERNAME=$env:TRIVY_USERNAME `
-            -e TRIVY_PASSWORD=$env:TRIVY_PASSWORD `
-            aquasec/trivy:0.70.0 image `
-            --severity HIGH,CRITICAL `
-            --ignore-unfixed `
-            --exit-code 0 `
-            $env:ACR_LOGIN_SERVER/notification-service:$env:IMAGE_TAG
+          docker run --rm \
+            -e TRIVY_USERNAME=$TRIVY_USERNAME \
+            -e TRIVY_PASSWORD=$TRIVY_PASSWORD \
+            aquasec/trivy:0.70.0 image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            $ACR_LOGIN_SERVER/notification-service:$IMAGE_TAG
 
       - name: Scan recipe-service image with Trivy
-        shell: powershell
+        shell: bash
         run: |
-          docker run --rm `
-            -e TRIVY_USERNAME=$env:TRIVY_USERNAME `
-            -e TRIVY_PASSWORD=$env:TRIVY_PASSWORD `
-            aquasec/trivy:0.70.0 image `
-            --severity HIGH,CRITICAL `
-            --ignore-unfixed `
-            --exit-code 0 `
-            $env:ACR_LOGIN_SERVER/recipe-service:$env:IMAGE_TAG
+          docker run --rm \
+            -e TRIVY_USERNAME=$TRIVY_USERNAME \
+            -e TRIVY_PASSWORD=$TRIVY_PASSWORD \
+            aquasec/trivy:0.70.0 image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            $ACR_LOGIN_SERVER/recipe-service:$IMAGE_TAG
 
       - name: Scan frontend image with Trivy
-        shell: powershell
+        shell: bash
         run: |
-          docker run --rm `
-            -e TRIVY_USERNAME=$env:TRIVY_USERNAME `
-            -e TRIVY_PASSWORD=$env:TRIVY_PASSWORD `
-            aquasec/trivy:0.70.0 image `
-            --severity HIGH,CRITICAL `
-            --ignore-unfixed `
-            --exit-code 0 `
-            $env:ACR_LOGIN_SERVER/frontend:$env:IMAGE_TAG
+          docker run --rm \
+            -e TRIVY_USERNAME=$TRIVY_USERNAME \
+            -e TRIVY_PASSWORD=$TRIVY_PASSWORD \
+            aquasec/trivy:0.70.0 image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
 
       - name: Update notification service
-        shell: powershell
+        shell: bash
         run: |
-          az containerapp update `
-            --name notification-service-app `
-            --resource-group recipehub-rg `
-            --image $env:ACR_LOGIN_SERVER/notification-service:$env:IMAGE_TAG
+          az containerapp update \
+            --name notification-service-app \
+            --resource-group recipehub-rg \
+            --image $ACR_LOGIN_SERVER/notification-service:$IMAGE_TAG
 
       - name: Update recipe service
-        shell: powershell
+        shell: bash
         run: |
-          az containerapp update `
-            --name recipe-service-app `
-            --resource-group recipehub-rg `
-            --image $env:ACR_LOGIN_SERVER/recipe-service:$env:IMAGE_TAG
+          az containerapp update \
+            --name recipe-service-app \
+            --resource-group recipehub-rg \
+            --image $ACR_LOGIN_SERVER/recipe-service:$IMAGE_TAG
 
       - name: Update frontend
-        shell: powershell
+        shell: bash
         run: |
-          az containerapp update `
-            --name frontend-app `
-            --resource-group recipehub-rg `
-            --image $env:ACR_LOGIN_SERVER/frontend:$env:IMAGE_TAG
+          az containerapp update \
+            --name frontend-app \
+            --resource-group recipehub-rg \
+            --image $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
