@@ -130,7 +130,7 @@ function App() {
   return (
     <div className="app">
       <div className="container">
-        <h1>RecipeHub V1</h1>
+        <h1>RecipeHub V2</h1>
         <p className="subtitle">Add, search, and manage recipes in Azure</p>
         <div className="card">
           <h2>Add a New Recipe</h2>
